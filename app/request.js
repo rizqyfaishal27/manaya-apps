@@ -4,7 +4,7 @@ import { keys } from 'lodash';
 
 const localStorage = window.localStorage;
 
-const BASE_URL = 'http://rohmattaufik.my.id/public/api';
+export const BASE_URL = 'http://manaya.id/api';
 
 const genericRequestInstance = axios.create({
   baseURL: BASE_URL,

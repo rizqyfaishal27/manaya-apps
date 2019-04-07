@@ -9,6 +9,8 @@ import globalReducer from 'app/globalReducer';
 import loginPageReducer from 'app/containers/LoginPage/reducer';
 import createTransactionPageReducer from 'app/containers/CreateTransactionPage/reducer';
 import contentPageReducer from 'app/containers/ContentPage/reducer';
+import transactionRecordsPageReducer from 'app/containers/TransactionRecordsPage/reducer';
+
 
 
 
@@ -24,6 +26,7 @@ export default function configStore(initialState, history) {
     loginPage: loginPageReducer,
     createTransactionPage: createTransactionPageReducer,
     contentPage: contentPageReducer,
+    transactionRecordsPage: transactionRecordsPageReducer
   });
 
 

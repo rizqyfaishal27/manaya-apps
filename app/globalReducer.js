@@ -15,7 +15,8 @@ const initialState = fromJS({
   data: 'ping',
   userData: null,
   isLoggedIn: false,
-  isVerifiyingToken: false
+  isVerifiyingToken: false,
+  online: true
 })
 
 export default function reducer(state=initialState, action) {
@@ -36,6 +37,8 @@ export default function reducer(state=initialState, action) {
       return state.merge({
         location: action.payload
       })
+    case GLOBAL_ON_SET_ONLINE_STATUS:
+      return state.set('online', action.online);
     default:
       return state;
   }
@@ -55,6 +58,7 @@ export const GLOBAL_RECEIVE_ACCOUNT_DATA = createActionName('GLOBAL_RECEIVE_ACCO
 export const GLOBAL_VERIFY_TOKEN = createActionName('GLOBAL_VERIFY_TOKEN');
 export const GLOBAL_ON_VERIFY_TOKEN_OK = createActionName('GLOBAL_ON_VERIFY_TOKEN_OK');
 export const GLOBAL_ON_VERIFY_TOKEN_UNAUTHORIZED = createActionName('GLOBAL_ON_VERIFY_TOKEN_UNAUTHORIZED');
+export const GLOBAL_ON_SET_ONLINE_STATUS = createActionName('GLOBAL_ON_SET_ONLINE_STATUS');
 
 // Actions Creator
 export const doSomething = () => ({ type: DO_SOMETHING });
@@ -75,9 +79,12 @@ export const verifyToken = (token) => {
       })
       .catch(error => {
         if(error.response.status == 401 || error.response.status == 500) {
+          dispatch(push('/'));
           dispatch(verifyTokenUnauthorized());
         }
       })
   }
 }
+
+export const setOnlineStatus = (online) => ({ type: GLOBAL_ON_SET_ONLINE_STATUS, online });
 

@@ -7,6 +7,7 @@ import { isNull, isUndefined } from 'lodash';
 
 import CreateTransactionPage from 'app/containers/CreateTransactionPage';
 import AboutPage from 'app/containers/AboutPage';
+import TransactionRecordsPage from 'app/containers/TransactionRecordsPage';
 
 import NavigationBar from 'app/components/NavigationBar';
 import NavigationContent from 'app/components/NavigationContent';
@@ -83,6 +84,13 @@ class ContentPage extends Component {
         }
       },
       {
+        text: 'Riwayat Transaksi',
+        onClick: (e) => {
+          e.preventDefault();
+          dispatch(onNavigationMenuTapAction(`${this.props.match.url}/records`))
+        }
+      },
+      {
         text: 'Tentang Manaya',
         onClick: (e) => {
           e.preventDefault();
@@ -115,6 +123,7 @@ class ContentPage extends Component {
         <div className="content">
           <Route path={`${this.props.match.url}/create`} component={CreateTransactionPage} />
           <Route path={`${this.props.match.url}/about`} component={AboutPage} />
+          <Route path={`${this.props.match.url}/records`} component={TransactionRecordsPage} />
         </div>
         <div className="bottom-bg"></div>
       </ContentPageWrapper>

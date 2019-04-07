@@ -5,7 +5,6 @@ import Close from 'app/components/NavigationContent/close.png';
 
 const NavigationContentWrapper = styled.div`
   width: 100%;
-  max-width: 500px;
   position: fixed;
   top: 35px;
   height: calc(100vh - 35px);
@@ -18,8 +17,9 @@ const NavigationContentWrapper = styled.div`
   transition: opacity ease-in-out 0.7s;
   background-color: #fff;
   z-index: 100;
+  backface-visibility: none;
   & > div {
-    max-height: 300px;
+    max-height: 350px;
     display: flex;
     flex-direction: column;
     justify-content: space-around;

@@ -6,3 +6,7 @@ export const getTransaskiBaru = () =>
 
 export const postTransaksiBaru = (data) => 
   authenticatedRequest('/transaksi-submit', 'POST', data);
+
+
+export const ping = () => 
+  authenticatedRequest('/ping', 'POST', null);

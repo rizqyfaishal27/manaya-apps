@@ -2,6 +2,10 @@ import React, { Component } from 'react';
 import styled from 'styled-components';
 import { connect } from 'react-redux';
 import { isNull } from 'lodash';
+import Select from 'react-select';
+
+import Online from 'app/assets/power-button-green.svg';
+import Offline from 'app/assets/power-button-red.svg';
 
 import {
   fetchInitialDataAction,
@@ -56,11 +60,15 @@ const CreateTransactionPageWrapper = styled.div`
   position: relative;
 
   & > div.title-about {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 1.5rem;
     padding: 0.5rem 1.7rem 0 1.7rem;
     & > h2 {
       font-size: 1.65rem;
       color: #aaa;
-      margin-bottom: 0;
+      margin: 0;
     }
   }
 
@@ -106,6 +114,31 @@ const CreateTransactionPageWrapper = styled.div`
       & > div > h2 {
         text-align: center;
       }
+
+      & > div:last-child {
+        & > div {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          & > button {
+            padding: 1rem;
+            background-color: grey;
+            color: white;
+            outline: none;
+            border: none;
+            cursor: pointer;
+            margin: 1rem;
+
+            &:hover {
+              opacity: 0.8;
+            }
+
+            &:active, &:focus {
+              background-color: black;
+            }
+          }
+        }
+      }
     }
 
     & > h3 {
@@ -120,11 +153,12 @@ const CreateTransactionPageWrapper = styled.div`
     }
 
 
-    & > div.address-content {
+    & > div.address-content, & > div.category {
       display: flex;
       justify-content: stretch;
       align-items: center;
       & > div:nth-child(1) {
+        width: 6rem;
         padding: 0 1rem;
         align-self: flex-start;
       }
@@ -135,8 +169,9 @@ const CreateTransactionPageWrapper = styled.div`
         justify-content: center;
         align-items: stretch;
         & > div {
+          color: #000000;
+          font-size: 0.9rem;
           margin: 0.5rem 0;
-
           & > input {
             background-color: transparent;
             text-align: left;
@@ -257,7 +292,22 @@ class CreateTransactionPage extends Component {
     this.onContinueToFinish = this.onContinueToFinish.bind(this);
     this.onCorrectionClick = this.onCorrectionClick.bind(this);
 
+    this.onNegaraChange = this.onNegaraChange.bind(this);
+    this.onProvinsiChange = this.onProvinsiChange.bind(this);
+    this.onKabupatenChange = this.onKabupatenChange.bind(this);
+    this.onCategoryChange = this.onCategoryChange.bind(this);
+
     this.requestData = null;
+
+    this.uangPasValue = null;
+    this.roundedHalf = null;
+    this.roundedFull = null;
+
+    this.state = {
+      negara: null,
+      provinsi: null,
+      kabupaten: null
+    }
   }
 
   onContinueToFinish() {
@@ -273,13 +323,19 @@ class CreateTransactionPage extends Component {
 
   onContinueToSummary() {
     const { createTransactionPage, dispatch } = this.props;
-    const kecamatan = this.kecamatanRef.current.value;
-    const kabupaten = this.kabupatenRef.current.value;
-    const provinsi = this.provinsiRef.current.value;
+    const negara = this.state.negara;
+    const kabupaten = this.state.kabupaten;
+    const provinsi = this.state.provinsi;
     const { transactionData } = createTransactionPage;
-    transactionData.kecamatan = kecamatan;
-    transactionData.kabupaten = kabupaten;
-    transactionData.provinsi = provinsi;
+    if(!isNull(negara)) {
+      transactionData.negara = negara.label;
+    }
+    if(!isNull(kabupaten)) {
+      transactionData.kabupaten = kabupaten.label;
+    }
+    if(!isNull(provinsi)) {
+      transactionData.provinsi = provinsi.label;
+    }
     let total = 0;
     let totalDiskon = 0;
     transactionData.tiket.forEach(tiket => {
@@ -292,14 +348,13 @@ class CreateTransactionPage extends Component {
       total += totalHargaTiket; 
       totalDiskon += totalDiskonTiket;
     })
-
-    transactionData.kategori_wisatawan.forEach(kategori => {
-      if(kategori.active) {
-        total = total * (parseFloat(100-kategori.diskon)/100.0);
-        totalDiskon += (totalDiskon * (parseFloat(kategori.diskon)/100.0));
-      }
-    })  
+    const currentCategory = createTransactionPage.currentCategory;
+    const categoryDiskon = currentCategory.value.diskon;
+    total = total * (parseFloat(100-categoryDiskon)/100.0);
+    totalDiskon += (totalDiskon * (parseFloat(categoryDiskon)/100.0));
+    transactionData.kategori_wisatawan = currentCategory.value.id;
     transactionData.total = total;
+    delete transactionData.wilayah;
     transactionData.total_diskon = totalDiskon;
     this.requestData = transactionData; 
     dispatch(continueToSummary());
@@ -307,13 +362,19 @@ class CreateTransactionPage extends Component {
 
   onContinueToCheckout() {
     const { createTransactionPage, dispatch } = this.props;
+    const total = this.requestData.total;
+    this.uangPasValue = total;
+    const totalString = total.toString();
+    this.roundedFull = Math.ceil(total / (Math.pow(10, totalString.length -  1))) *  (Math.pow(10, totalString.length -  1));
+    this.roundedHalf = (Math.floor(total / Math.pow(10, 3)) + 1) * 1000;
+
     dispatch(continueToCheckout());
   }
 
   onFinishTransaction() {
-    const { dispatch, createTransactionPage } = this.props;
+    const { dispatch, createTransactionPage, global } = this.props;
     this.requestData.email = this.emailRef.current.value;
-    dispatch(postTransaction(this.requestData));
+    dispatch(postTransaction(this.requestData, global.online));
   }
 
   componentDidMount() { 
@@ -321,24 +382,74 @@ class CreateTransactionPage extends Component {
     dispatch(fetchInitialDataAction());
   }
 
+  onCheckOutValueClick(type) {
+    const  { dispatch } = this.props;
+    switch(type) {
+      case 'half': {
+        this.totalAmountRef.current.value = this.roundedHalf;
+        dispatch(setJumlahBayar(this.roundedHalf));
+        break;
+      }
+      case 'full': {
+        this.totalAmountRef.current.value = this.roundedFull;
+        dispatch(setJumlahBayar(this.roundedFull));
+        break;
+      }
+      default: {
+        this.totalAmountRef.current.value = this.uangPasValue;
+        dispatch(setJumlahBayar(this.uangPasValue));
+        break;
+      }
+
+    }
+  }
+
   componentWillUpdate(props) {
     const { dispatch, createTransactionPage } = props;
     if(createTransactionPage.isResetField) {
-      this.provinsiRef = React.createRef();
-      this.kabupatenRef = React.createRef();
-      this.kecamatanRef = React.createRef();
       this.totalAmountRef = React.createRef();
       this.emailRef = React.createRef();
 
       this.requestData = null;
+      if(this.state.negara != null && this.state.provinsi != null && this.state.kabupaten != null) {
+        this.setState({
+          negara: null,
+          provinsi: null,
+          kabupaten: null
+        })
+      }
       setTimeout(() => {
         dispatch(resetField());
       }, 3000);
     }  
   }
 
+  onNegaraChange(value) {
+    this.setState({
+      negara: value
+    })
+  }
+
+  onProvinsiChange(value) {
+    this.setState({
+      provinsi: value
+    })
+  }
+
+  onKabupatenChange(value) {
+    this.setState({
+      kabupaten: value
+    })
+  }
+
+  onCategoryChange(value) {
+    const { dispatch } = this.props;
+    dispatch(setCategory(value))
+  } 
+
   render() {
-    const { createTransactionPage, dispatch } = this.props;
+    const { createTransactionPage, dispatch, global } = this.props;
+    console.log(createTransactionPage.currentCategory);
     let isButtonEnabled = true;
     if(!isNull(createTransactionPage.transactionData) && !createTransactionPage.isLoading) {
       isButtonEnabled = createTransactionPage
@@ -356,6 +467,7 @@ class CreateTransactionPage extends Component {
         <CreateTransactionPageWrapper>
           <div className="title-about">
             <h2>{ createTransactionPage.mode == CREATE_TRANSACTION_MODE ? 'Transaksi baru' : 'Ringkasan Transaksi'}</h2>
+            <img src={global.online ? Online : Offline} height="30" />
           </div>
 
           <div className="create-content">
@@ -405,6 +517,23 @@ class CreateTransactionPage extends Component {
                   borderColorFocus="#fff"
                   placeholder="Jumlah yang dibayar" 
                   inputRef={this.totalAmountRef}/>
+                <div>
+                  <div>
+                    <button onClick={() => this.onCheckOutValueClick('full')}>
+                      { convertToRupiah(this.roundedFull)}
+                    </button>
+                    { this.roundedFull != this.roundedHalf &&
+                        <button onClick={() => this.onCheckOutValueClick('half')}>
+                          { convertToRupiah(this.roundedHalf)}
+                        </button>
+                    }
+                  </div>
+                  <div>
+                    <button onClick={() => this.onCheckOutValueClick('uangpas')}>
+                      Uang pas
+                    </button>
+                  </div>
+                </div>
               </div>
             }
             {
@@ -423,7 +552,7 @@ class CreateTransactionPage extends Component {
                     createTransactionPage.mode == SUMMARY_TRANSACTION_MODE)
                     &&  
                     <div>
-                      <TextContent color="#fff" backgroundColor={index % 2 == 0 ? '#111dbb' : '#bb11ac' }>
+                      <TextContent color={index % 2 != 0 ? '#111dbb' : '#fff' } backgroundColor={index % 2 == 0 ? '#111dbb' : '#fff' }>
                         <h5>{ tiket.wisatawan.nama }</h5>
                       </TextContent>
                     </div>
@@ -432,11 +561,11 @@ class CreateTransactionPage extends Component {
                     <div>
                       <CircleButton
                         onClick={() => { dispatch(increaseAmountTicket(index))}}
-                        backgroundColor={index % 2 == 0 ? '#111dbb' : '#bb11ac' }
-                        backgroundColorDisabled={index %2 == 0 ? '#525cdc' : '#da53ce'}
+                        backgroundColor={index % 2 == 0 ? '#111dbb' : '#fff' }
+                        backgroundColorDisabled={index %2 == 0 ? '#525cdc' : '#eee'}
                         disabled={isNull(tiket.jumlah_tiket) ? false : tiket.jumlah >= tiket.jumlah_tiket}
-                        color="#fff" 
-                        backgroundColorActive={index % 2 == 0 ? '#1d2482' : '#940b88' }>+</CircleButton>
+                        color={index % 2 != 0 ? '#111dbb' : '#fff' }
+                        backgroundColorActive={index % 2 == 0 ? '#1d2482' : '#ddd' }>+</CircleButton>
                     </div>
                   }
                  {
@@ -444,17 +573,17 @@ class CreateTransactionPage extends Component {
                    <div>
                     <CircleButton 
                       onClick={() => { dispatch(decreaseAmountTicket(index))}}
-                      backgroundColor={index % 2 == 0 ? '#111dbb' : '#bb11ac' }
-                      backgroundColorDisabled={index %2 == 0 ? '#525cdc' : '#da53ce'}
+                      backgroundColor={index % 2 == 0 ? '#111dbb' : '#fff' }
+                      backgroundColorDisabled={index %2 == 0 ? '#525cdc' : '#eee'}
                       disabled={tiket.jumlah <= 0}
-                      color="#fff" 
-                      backgroundColorActive={index % 2 == 0 ? '#1d2482' : '#940b88' }>-</CircleButton>
+                      color={index % 2 != 0 ? '#111dbb' : '#fff' } 
+                      backgroundColorActive={index % 2 == 0 ? '#1d2482' : '#ddd' }>-</CircleButton>
                   </div>
                  }
                  { createTransactionPage.mode == SUMMARY_TRANSACTION_MODE 
                    && 
                    <div className="">
-                     <TextContent color="#fff" backgroundColor={index % 2 == 0 ? '#111dbb' : '#bb11ac' }>
+                     <TextContent color={index % 2 != 0 ? '#111dbb' : '#fff' } backgroundColor={index % 2 == 0 ? '#111dbb' : '#fff' }>
                       <h5>{ tiket.jumlah }</h5>
                     </TextContent>
                   </div>
@@ -463,7 +592,8 @@ class CreateTransactionPage extends Component {
                   (createTransactionPage.mode == CREATE_TRANSACTION_MODE || createTransactionPage.mode == SUMMARY_TRANSACTION_MODE)
                   && 
                   <div className="jumlah-per-tiket">
-                    <TextContent color="#fff" backgroundColor={index % 2 == 0 ? '#111dbb' : '#bb11ac' }>
+                    <TextContent color={index % 2 != 0 ? '#111dbb' : '#fff' } 
+                      backgroundColor={index % 2 == 0 ? '#111dbb' : '#fff' }>
                       <h5>{ createTransactionPage.mode == CREATE_TRANSACTION_MODE &&  tiket.jumlah }</h5>
                       <h5>{ createTransactionPage.mode == SUMMARY_TRANSACTION_MODE && 
                         `Rp. ${convertToRupiah(tiket.jumlah * tiket.harga_tiket)},00`}</h5>
@@ -479,44 +609,53 @@ class CreateTransactionPage extends Component {
                   <h4>Asal:</h4>
                 </div>
                 <div>
-                  <InputText
-                    defaultValue={!isNull(this.requestData) ? this.requestData.provinsi : ''}
-                    type="text"
-                    color="#fff"
-                    borderColor="#ddd" 
-                    borderColorFocus="#fff"
-                    placeholder="Provinsi" inputRef={this.provinsiRef}/>
-                  <InputText
-                    defaultValue={!isNull(this.requestData) ? this.requestData.kabupaten : ''}
-                    type="text"
-                    color="#fff"
-                    borderColor="#ddd" 
-                    borderColorFocus="#fff" 
-                    placeholder="Kabupaten" inputRef={this.kabupatenRef}/>
-                  <InputText
-                    defaultValue={!isNull(this.requestData) ? this.requestData.kecamatan : ''}
-                    type="text"
-                    color="#fff"
-                    borderColor="#ddd" 
-                    borderColorFocus="#fff" 
-                    placeholder="Kecamatan" inputRef={this.kecamatanRef}/>
+                  <Select 
+                    placeholder="Negara"
+                    onChange={this.onNegaraChange}
+                    options={createTransactionPage.transactionData.wilayah.map((wil, index) => ({
+                      label: wil.nama_negara,
+                      value: index
+                    }))}
+                  />
+                  <Select 
+                    placeholder="Provinsi"
+                    onChange={this.onProvinsiChange}
+                    options={this.state.negara == null ? [] : 
+                      createTransactionPage.transactionData.wilayah[this.state.negara.value].provinsis
+                        .map((prov, index) => ({
+                        label: prov.nama_provinsi,
+                        value: index
+                      }))}
+                  />
+                  <Select 
+                    placeholder="Kabupaten"
+                    onChange={this.onKabupatenChange}
+                    options={this.state.negara == null || this.state.provinsi == null ? [] : 
+                      createTransactionPage.transactionData.wilayah[this.state.negara.value].provinsis[this.state.provinsi.value]
+                        .kabupaten.map((kab, index) => ({
+                          label: kab.nama_kabupaten,
+                          value: index
+                        }))}
+                  />
                 </div>
               </div>
             }
             { createTransactionPage.mode == CREATE_TRANSACTION_MODE &&
-              <div className="radio">
-                { createTransactionPage.transactionData.kategori_wisatawan.map((kategori, index) => 
-                  <div key={index}>
-                    <CircleRadio name="category" 
-                      value={kategori.id} 
-                      defaultChecked={kategori.active} 
-                      onClick={() => { dispatch(setCategory(index))}}
-                    />
-                    <InputLabel>
-                      { kategori.nama_kategori[0].toUpperCase() + kategori.nama_kategori.substr(1) }
-                    </InputLabel>
-                  </div>
-                )}
+              <div className="category">
+                <div>
+                  <h4>Kategori:</h4>
+                </div>
+                <div>
+                  <Select 
+                    placeholder="Kategori Wisatawan"
+                    onChange={this.onCategoryChange}
+                    defaultValue={createTransactionPage.currentCategory}
+                    options={createTransactionPage.transactionData.kategori_wisatawan.map((kategori, index) => ({
+                      value: kategori,
+                      label: kategori.nama_kategori[0].toUpperCase() + kategori.nama_kategori.substr(1)
+                    }))}
+                  />
+                </div> 
               </div>
             }
             { createTransactionPage.mode == SUMMARY_TRANSACTION_MODE &&
@@ -533,7 +672,7 @@ class CreateTransactionPage extends Component {
                && <MediumRoundedButton className="correction"
                 onClick={this.onCorrectionClick}
                 color="#ddd" 
-                backgroundColor="#ec240d"
+                backgroundColor="#2c53bb"
                 backgroundColorDisabled="#d65445"
                 backgroundColorActive="#ab3022">
                 Koreksi
@@ -546,9 +685,9 @@ class CreateTransactionPage extends Component {
                         this.onContinueToFinish : this.onFinishTransaction
                       ))}
                   disabled={!isButtonEnabled}
-                  color="#ddd" 
-                  backgroundColor="#aaa"
-                  backgroundColorDisabled="#ccc"
+                  color="#ffffff" 
+                  backgroundColor="#31981f"
+                  backgroundColorDisabled="#dddddd"
                   backgroundColorActive="#111">
                   { createTransactionPage.mode == CREATE_TRANSACTION_MODE ? 'Lanjutkan Transaksi ->>' : 
                     (createTransactionPage.mode == FINISH_TRANSACTION_MODE ? 'Selesai' :
@@ -558,7 +697,8 @@ class CreateTransactionPage extends Component {
                 </MediumRoundedButton>
              }
             </div>
-          </div></CreateTransactionPageWrapper>
+          </div>
+        </CreateTransactionPageWrapper>
     )
   }
 } 

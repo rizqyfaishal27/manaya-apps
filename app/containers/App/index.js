@@ -8,7 +8,8 @@ import { isNull, isUndefined } from 'lodash';
 import HomePage from 'app/containers/HomePage';
 import LoginPage from 'app/containers/LoginPage';
 import ContentPage from 'app/containers/ContentPage';
-
+import { store } from 'app';
+import { setOnlineStatus } from 'app/globalReducer';
 
 
 const AppWrapper = styled.div`
@@ -26,6 +27,11 @@ class App extends Component {
     super(props);
   }
 
+  componentWillReceiveProps(props) {
+    console.log(props.online)
+    store.dispatch(setOnlineStatus(props.online));
+  }
+
   
   render() {
     return (<AppWrapper>
@@ -36,6 +42,7 @@ class App extends Component {
     </AppWrapper>);
   }
 }
+
 
 export default App;
 

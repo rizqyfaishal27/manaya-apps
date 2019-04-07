@@ -1,6 +1,8 @@
 import { Map, List, fromJS } from 'immutable'; 
 import { isNull } from 'lodash';
 import { push } from 'react-router-redux';
+import moment from 'moment';
+import { DB } from 'app/utils/configLocalDB';
 
 import {
   getTransaskiBaru,
@@ -23,7 +25,7 @@ const initialState = fromJS({
   mode: CREATE_TRANSACTION_MODE,
   isLoading: false,
   transactionData: null,
-  currentCategory: -1,
+  currentCategory: { value: -1, label: '' },
   jumlah_bayar: -1,
   isResetField: false,
 });
@@ -40,9 +42,16 @@ export default function reducer(state=initialState, action) {
     case CREATE_TRANSACTION_POST_TRANSACTION_REQUEST:
       return state.set('isLoading', true);
     case CREATE_TRANSACTION_RECEIVE_SUCCESS_TRANSACTION:
-      return initialState.set('isLoading', true)
+      const transactionData = state.get('transactionData').toJS();
+      console.log(transactionData);
+      return initialState.set('isLoading', false)
                          .set('mode', SUCCESS_TRANSACTION_MODE)
-                         .set('isResetField', true);
+                         .set('isResetField', true)
+                         .set('transactionData', state.get('transactionData'))
+                         .set('currentCategory', transactionData.kategori_wisatawan.length > 0 ? 
+                          { value:  transactionData.kategori_wisatawan[0], 
+                            label:  transactionData.kategori_wisatawan[0].nama_kategori[0].toUpperCase() +
+                              transactionData.kategori_wisatawan[0].nama_kategori.substr(1) } : null);
     case CREATE_TRANSACTION_SET_JUMLAH_BAYAR:
       return state.set('jumlah_bayar', action.value);
     case CREATE_TRANSACTION_CONTINUE_TO_FINISH:
@@ -59,11 +68,10 @@ export default function reducer(state=initialState, action) {
       return state.set('mode', SUMMARY_TRANSACTION_MODE);
     case CREATE_TRANSACTION_SET_CATEGORY:
       const currentCategory = state.get('currentCategory');
-      return state.setIn(['transactionData', 'kategori_wisatawan', currentCategory, 'active'], false)
-                  .setIn(['transactionData', 'kategori_wisatawan', action.index, 'active'], true);
+      return state.set('currentCategory', action.value);
     case CREATE_TRANSACTION_FETCH_INITIAL_DATA:
       return state.set('isLoading', true);
-    case CREATE_TRANSACTION_RECEIVE_INITIAL_DATA:
+    case CREATE_TRANSACTION_RECEIVE_INITIAL_DATA: {
       return state.set('isLoading', false)
                   .set('transactionData', 
                     fromJS(action.data)
@@ -74,9 +82,13 @@ export default function reducer(state=initialState, action) {
                           index == 0 ?  kat.set('active', true) : kat.set('active', false)))
                       .set('provinsi', '')
                       .set('kabupaten', '')
-                      .set('kecamatan', '')
+                      .set('negara', '')
                   )
-                  .set('currentCategory', action.data.kategori_wisatawan.length > 0 ? 0 : -1);
+                  .set('currentCategory', action.data.kategori_wisatawan.length > 0 ? 
+                    { value:  action.data.kategori_wisatawan[0], 
+                      label:  action.data.kategori_wisatawan[0].nama_kategori[0].toUpperCase() +
+                        action.data.kategori_wisatawan[0].nama_kategori.substr(1) } : null);
+    }
     case CREATE_TRANSACTION_INCREASE_AMOUNT_TICKET:
       let max = state.getIn(['transactionData', 'tiket', action.index, 'jumlah_tiket']);
       if(isNull(max)) {
@@ -123,7 +135,7 @@ export const receiveInitialData = (data) => ({ type: CREATE_TRANSACTION_RECEIVE_
 export const increaseAmountTicket = (index) => ({ type: CREATE_TRANSACTION_INCREASE_AMOUNT_TICKET, index});
 export const decreaseAmountTicket = (index) => ({ type: CREATE_TRANSACTION_DECREASE_AMOUNT_TICKET, index});
 
-export const setCategory = (index) => ({ type: CREATE_TRANSACTION_SET_CATEGORY, index });
+export const setCategory = (value) => ({ type: CREATE_TRANSACTION_SET_CATEGORY, value });
 export const continueToSummary = () => ({ type: CREATE_TRANSACTION_CONTINUE_TO_SUMMARY });
 export const continueToCheckout = () => ({ type: CREATE_TRANSACTION_CONTINUE_TO_CHECK_OUT });
 export const continueToFinish = () => ({ type: CREATE_TRANSACTION_CONTINUE_TO_FINISH });
@@ -135,35 +147,72 @@ export const receiveSuccessTransaction = (data) => ({ type: CREATE_TRANSACTION_R
 
 export const resetField = () => ({ type: CREATE_TRANSACTION_RESET_FIELD });
 
-export const postTransaction = (requestData) => {
+export const postTransaction = (requestData, online) => {
   return dispatch => {
     dispatch(postTransactionRequest());
-    return postTransaksiBaru(requestData)
-      .then(response => {
-        if(response.status == 200) {
-          dispatch(receiveSuccessTransaction(response.data));
-          dispatch(fetchInitialDataAction());
-        }
-      })
-      .catch(error => {
-        throw error;
-      })
+    if(online) {
+      return postTransaksiBaru([requestData])
+        .then(response => {
+          if(response.status == 200) {
+            DB.put({
+              requestData,
+              _id: moment.now().toString(),
+              is_synced: true,
+              created_at: moment.now()
+            })
+            .then(success => {
+              dispatch(fetchInitialDataAction(!online));
+              dispatch(receiveSuccessTransaction(response.data));
+            })
+            .catch(error => {
+              console.log(error);
+            })
+          }
+        })
+        .catch(error => {
+          console.log(error);
+        })
+      } else {
+        DB.put({
+          requestData,
+          is_synced: false,
+          _id: moment.now().toString(),
+          created_at: moment.now()
+        })
+        .then(success => {
+          dispatch(fetchInitialDataAction(!online));
+          dispatch(receiveSuccessTransaction(requestData));
+        })
+        .catch(error => console.log(error))
+      }
   }
 }
  
-export const fetchInitialDataAction = () => {
+export const fetchInitialDataAction = (offline) => {
   return dispatch => {
-    dispatch(fetchInitialData());
-    return getTransaskiBaru()
-      .then(response => {
-        if(response.status == 200) {
-          dispatch(receiveInitialData(response.data));
-        }
-      })
-      .catch(error => {
-        if(error.response.status == 401) {
-          dispatch(push('/'));
-        }
-      })
+    const transactionDataDate = window.localStorage.getItem('transactionDataDate');
+    const momentObj = moment.unix(+transactionDataDate / 1000);
+    if(moment().diff(momentObj, 'days') >= 1 && !offline) {
+
+      dispatch(fetchInitialData());
+      return getTransaskiBaru()
+        .then(response => {
+          if(response.status == 200) {
+            dispatch(receiveInitialData(response.data));
+            const localstorage = window.localStorage;
+            localstorage.setItem('transactionData', JSON.stringify(response.data));
+            localstorage.setItem('transactionDataDate', JSON.stringify(moment.now()));
+          }
+        })
+        .catch(error => {
+          if(error.response.status == 401) {
+            dispatch(push('/'));
+          }
+        })
+    } else {
+      const transactionData = window.localStorage.getItem('transactionData');
+      dispatch(receiveInitialData(JSON.parse(transactionData)));
+    }
+    
   }
 }
